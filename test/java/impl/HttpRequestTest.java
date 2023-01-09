@@ -1,44 +1,50 @@
-package impl;
+package httpclient;
 
+import jdk.jfr.Description;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
+import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.*;
 
 class HttpRequestTest {
 
     @Test
+    @Description("Tests if builder is not null after creation.")
     void testNewBuilderNotNull() {
         HttpRequestBuilder builder = HttpRequest.newBuilder();
         assertNotNull(builder);
     }
 
     @Test
+    @Description("Tests if get method is set from builder to request.")
     void testGetMethod() {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
-        builder.method = "POST";
+        builder.method = "GET";
         HttpRequest request = new HttpRequest(builder);
-        assertEquals("POST", request.method());
+        assertEquals("GET", request.method());
     }
 
     @Test
-    void testGetUri() throws URISyntaxException {
+    @Description("Tests if uri is set from builder to request.")
+    void getUri() throws URISyntaxException {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
         builder.uri = new URI("https://postman-echo.com/get");
+        builder.headers = new HashMap<>();
         HttpRequest request = new HttpRequest(builder);
         assertEquals(new URI("https://postman-echo.com/get"), request.uri());
     }
 
     @Test
-    void testGetHeaders() {
+    @Description("Tests if headers are set from builder to request.")
+    void getHeaders() {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
         builder.headers = new HashMap<>(Map.of("key", "value"));
         HttpRequest request = new HttpRequest(builder);
@@ -46,7 +52,8 @@ class HttpRequestTest {
     }
 
     @Test
-    void testBodyPublisherOfString() {
+    @Description("Tests if correct bodyPublisher is set.")
+    void setBodyPublisherOfString() {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
         BodyPublisher stringPublisher = HttpRequest.BodyPublishers.ofString("body");
         builder.bodyPublisher = stringPublisher;
@@ -55,7 +62,8 @@ class HttpRequestTest {
     }
 
     @Test
-    void testBodyPublisherOfStringWithCharset() {
+    @Description("Tests if correct bodyPublisher is set.")
+    void setBodyPublisherOfStringWithCharset() {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
         BodyPublisher stringPublisher = HttpRequest.BodyPublishers.ofString("body", StandardCharsets.UTF_8);
         builder.bodyPublisher = stringPublisher;
@@ -64,7 +72,8 @@ class HttpRequestTest {
     }
 
     @Test
-    void testBodyPublisherOfByteArray() {
+    @Description("Tests if correct bodyPublisher is set.")
+    void setBodyPublisherOfByteArray() {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
         BodyPublisher bytePublisher = HttpRequest.BodyPublishers.ofByteArray(new byte[]{3, 124, 12, 31, 125});
         builder.bodyPublisher = bytePublisher;
@@ -73,7 +82,8 @@ class HttpRequestTest {
     }
 
     @Test
-    void testBodyPublisherOfInputStream() {
+    @Description("Tests if correct bodyPublisher is set.")
+    void setBodyPublisherOfInputStream() {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
         BodyPublisher inputStreamPublisher = HttpRequest.BodyPublishers.ofInputStream(() -> new ByteArrayInputStream(new byte[]{1, 3}));
         builder.bodyPublisher = inputStreamPublisher;
@@ -82,7 +92,8 @@ class HttpRequestTest {
     }
 
     @Test
-    void testNoBodyPublisher() {
+    @Description("Tests if correct bodyPublisher is set.")
+    void setNoBodyPublisher() {
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
         BodyPublisher noBodyPublisher = HttpRequest.BodyPublishers.noBody();
         builder.bodyPublisher = noBodyPublisher;
@@ -90,5 +101,117 @@ class HttpRequestTest {
         assertEquals(noBodyPublisher, request.bodyPublisher);
     }
 
+    @Test
+    @Description("Tests if request generates default headers")
+    void generateDefaultHeaders() throws URISyntaxException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .GET()
+                .build();
 
+        String host = request.headers().get("Host");
+        String acceptEncoding = request.headers().get("Accept-encoding");
+        String acceptCharset = request.headers().get("Accept-charset");
+        assertAll(
+                () -> assertEquals("postman-echo.com", host),
+                () -> assertEquals("utf-8", acceptCharset),
+                () -> assertEquals("gzip, deflate", acceptEncoding));
+    }
+
+    @Test
+    @Description("Tests if requests sends default headers")
+    void sentDefaultHeaders() throws URISyntaxException, IOException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .POST(HttpRequest.BodyPublishers.ofString("АABCDEFGHIKLMNOPQRSTVXYZ"))
+                .build();
+
+        HttpClient client = new HttpClient();
+        client.send(request, HttpResponse.BodyHandlers.ofString());
+        String host = request.headers().get("Host");
+        String acceptEncoding = request.headers().get("Accept-encoding");
+        String acceptCharset = request.headers().get("Accept-charset");
+        String contentLength = request.headers().get("Content-length");
+        assertAll(
+                () -> assertEquals("postman-echo.com", host),
+                () -> assertEquals("utf-8", acceptCharset),
+                () -> assertEquals("gzip, deflate", acceptEncoding),
+                () -> assertEquals("25", contentLength));
+    }
+
+    @Test
+    @Description("Tests if requests sends correct header after modifying one of default headers")
+    void sendCorrectHeader() throws URISyntaxException, IOException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .POST(HttpRequest.BodyPublishers.ofString("АABCDEFGHIKLMNOPQRSTVXYZ"))
+                .headers("Accept-charset", "utf-16")
+                .build();
+
+        HttpClient client = new HttpClient();
+        client.send(request, HttpResponse.BodyHandlers.ofString());
+        String host = request.headers().get("Host");
+        String acceptEncoding = request.headers().get("Accept-encoding");
+        String acceptCharset = request.headers().get("Accept-charset");
+        String contentLength = request.headers().get("Content-length");
+        assertAll(
+                () -> assertEquals("postman-echo.com", host),
+                () -> assertEquals("utf-16", acceptCharset),
+                () -> assertEquals("gzip, deflate", acceptEncoding),
+                () -> assertEquals("25", contentLength));
+    }
+
+    @Test
+    @Description("Tests if request sets automatically content-length after giving string body")
+    void automaticContentLengthSetStringBody() throws IOException, URISyntaxException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .POST(HttpRequest.BodyPublishers.ofString("123456789"))
+                .build();
+
+        contentLengthTest(request, "9");
+    }
+
+    @Test
+    @Description("Tests if request sets automatically content-length after giving no body")
+    void automaticContentLengthSetNoBody() throws IOException, URISyntaxException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .POST(HttpRequest.BodyPublishers.noBody())
+                .build();
+
+        contentLengthTest(request, null);
+    }
+
+    @Test
+    @Description("Tests if request sets automatically content-length after giving byte array body")
+    void automaticContentLengthSetByteBody() throws IOException, URISyntaxException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .POST(HttpRequest.BodyPublishers.ofByteArray(new byte[]{1, 2, 3, 4, 5, 6, 7, 8, 9}))
+                .build();
+
+        contentLengthTest(request, "9");
+    }
+
+    @Test
+    @Description("Tests if request sets automatically content-length after giving input stream body")
+    void automaticContentLengthSetInputStreamBody() throws IOException, URISyntaxException {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .POST(HttpRequest.BodyPublishers.ofInputStream(() -> new ByteArrayInputStream("testing".getBytes())))
+                .build();
+
+        contentLengthTest(request, "7");
+    }
+
+    private static void contentLengthTest(HttpRequest request, String length) throws IOException {
+        String contentLength = request.headers().get("Content-length");
+        assertNull(contentLength);
+
+        HttpClient client = new HttpClient();
+        client.send(request, HttpResponse.BodyHandlers.ofString());
+        contentLength = request.headers().get("Content-length");
+        assertEquals(contentLength, length);
+    }
 }

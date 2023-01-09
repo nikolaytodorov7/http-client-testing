@@ -1,5 +1,6 @@
-package impl;
+package httpclient;
 
+import jdk.jfr.Description;
 import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
@@ -15,28 +16,28 @@ import static org.junit.jupiter.api.Assertions.*;
 class HttpResponseTest {
 
     @Test
-    void statusCode() {
+    @Description("Tests if response throws exception after receiving null status line")
+    <T> void responseNullStatusLineException() {
+        assertThrows(IllegalStateException.class, () -> new HttpResponse<T>(InputStream.nullInputStream(), null));
     }
 
     @Test
-    void testAutomaticContentLengthSet() throws IOException, URISyntaxException {
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("https://postman-echo.com/post"))
-                .headers("Content-Type", "text/plain;charset=UTF-8")
-                .POST(HttpRequest.BodyPublishers.ofString("123456789"))
-                .build();
-
-        HttpClient client = new HttpClient();
-        HttpResponse<String> send = client.send(request, HttpResponse.BodyHandlers.ofString());
-        String body = send.body();
-        String[] split = body.split("\"content-length\":\"");
-        split = split[1].split("\",");
-        int contentLength = 9;
-        assertEquals(contentLength, Integer.valueOf(split[0]));
+    @Description("Tests if response throws correct exception after receiving invalid status line")
+    <T> void responseStatusLineInvalidArgsException() throws IOException {
+        String line = "oqkerkf 103je oaklp1 o02edjoef";
+        assertThrows(IllegalStateException.class, () -> new HttpResponse<T>(new ByteArrayInputStream(line.getBytes()), null));
     }
 
     @Test
-    void testIfDefaultHeadersAreSent() throws URISyntaxException, IOException {
+    @Description("Tests if response throws correct exception after receiving invalid headers")
+    <T> void invalidHeadersException() {
+        String line = "HTTP/1.1 200\nheader1: value2\nheader1value2";
+        assertThrows(IllegalStateException.class, () -> new HttpResponse<T>(new ByteArrayInputStream(line.getBytes()), null));
+    }
+
+    @Test
+    @Description("Tests if we get back headers sent as body")
+    void testHeadersInBody() throws URISyntaxException, IOException {
         HttpRequest request3 = HttpRequest.newBuilder()
                 .uri(new URI("https://postman-echo.com/post"))
                 .headers("Content-Type", "text/plain;charset=UTF-8")
@@ -68,19 +69,9 @@ class HttpResponseTest {
     }
 
     @Test
-    <T> void testResponseNullStatusLineException() throws IOException {
-        assertThrows(IllegalStateException.class, () -> new HttpResponse<T>(InputStream.nullInputStream(), null));
-    }
-
-    @Test
-    <T> void testResponseInvalidNumberOfArgumentsStatusLineException() throws IOException {
-        String line = "oqkerkf 103je oaklp1 o02edjoef";
-        assertThrows(IllegalStateException.class, () -> new HttpResponse<T>(new ByteArrayInputStream(line.getBytes()), null));
-    }
-
-    @Test
-    <T> void testInvalidHeadersException() {
-        String line = "HTTP/1.1 200\nheader1: value2\nheader1value2";
+    @Description("Tests if throws exception after sending body before headers")
+    <T> void sendBodyBeforeHeadersException() {
+        String line = "HTTP/1.1 200\nbody......\n\nheader1: value2\nheader1value2";
         assertThrows(IllegalStateException.class, () -> new HttpResponse<T>(new ByteArrayInputStream(line.getBytes()), null));
     }
 }
