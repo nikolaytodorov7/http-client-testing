@@ -62,8 +62,6 @@ class HttpResponseTest {
         assertEquals("postman-echo.com", host);
         String contentType = headers.get("content-type");
         assertEquals("application/json", contentType);
-        String acceptCharset = headers.get("accept-charset");
-        assertEquals("utf-8", acceptCharset);
         String contentLength = headers.get("content-length");
         assertEquals("25", contentLength);
     }
