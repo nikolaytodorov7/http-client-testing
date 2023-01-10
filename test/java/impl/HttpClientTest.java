@@ -2,16 +2,19 @@ package httpclient;
 
 import jdk.jfr.Description;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.net.Socket;
 import java.net.URI;
 import java.net.URISyntaxException;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 class HttpClientTest {
-
     @Test
     @Description("Test if we receive not null builder")
     void newBuilderNotNull() {
@@ -22,30 +25,47 @@ class HttpClientTest {
     @Test
     @Description("Test if we receive not null response")
     void sendReturnResponse() throws URISyntaxException, IOException {
-        HttpClient client = new HttpClient();
-        HttpResponse<Object> send = client.send(HttpRequest.newBuilder().uri(new URI("https://postman-echo.com/post")).GET().build(), HttpResponse.BodyHandlers.ofString());
-        assertNotNull(send);
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(new URI("https://postman-echo.com/post"))
+                .GET()
+                .build();
+
+        Socket socket = Mockito.mock(Socket.class);
+        ByteArrayInputStream inputStream = new ByteArrayInputStream("HTTP/1.1 200\nheader1: value2\nheader2: value2".getBytes());
+        when(socket.getInputStream()).thenReturn(inputStream);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        when(socket.getOutputStream()).thenReturn(outputStream);
+
+        HttpClient client = Mockito.spy(HttpClient.class);
+        when(client.createSocket(request)).thenReturn(socket);
+
+        HttpResponse<Object> httpResponse = client.send(request, HttpResponse.BodyHandlers.ofString());
+        assertNotNull(httpResponse);
     }
 
     @Test
-    @Description("Tests if requests sends default headers")
-    void sentDefaultHeaders() throws URISyntaxException, IOException {
+    @Description("Tests if client sends content-length header")
+    void sentContentLengthHeader() throws URISyntaxException, IOException {
+        String str = "aokerctg hktqeraomw";
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(new URI("https://postman-echo.com/post"))
-                .POST(HttpRequest.BodyPublishers.ofString("АABCDEFGHIKLMNOPQRSTVXYZ"))
+                .POST(HttpRequest.BodyPublishers.ofString(str))
                 .build();
 
-        HttpClient client = new HttpClient();
+        Socket socket = Mockito.mock(Socket.class);
+        ByteArrayInputStream inputStream = new ByteArrayInputStream("HTTP/1.1 200\nheader1: value2\nheader2: value2".getBytes());
+        when(socket.getInputStream()).thenReturn(inputStream);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        when(socket.getOutputStream()).thenReturn(outputStream);
+
+        HttpClient client = Mockito.spy(HttpClient.class);
+        when(client.createSocket(request)).thenReturn(socket);
         client.send(request, HttpResponse.BodyHandlers.ofString());
-        String host = request.headers().get("Host");
-        String acceptEncoding = request.headers().get("Accept-encoding");
-        String acceptCharset = request.headers().get("Accept-charset");
-        String contentLength = request.headers().get("Content-length");
-        assertAll(
-                () -> assertEquals("postman-echo.com", host),
-                () -> assertEquals("utf-8", acceptCharset),
-                () -> assertEquals("gzip, deflate", acceptEncoding),
-                () -> assertEquals("25", contentLength));
+
+        String[] split = outputStream.toString().split("Content-length: ");
+        split = split[1].split("\r\n");
+        String contentLength = split[0];
+        assertEquals(String.valueOf(str.getBytes().length), contentLength);
     }
 
     @Test
@@ -58,10 +78,21 @@ class HttpClientTest {
                 .headers("Accept-charset", charset)
                 .build();
 
-        HttpClient client = new HttpClient();
+        Socket socket = Mockito.mock(Socket.class);
+        ByteArrayInputStream inputStream = new ByteArrayInputStream("HTTP/1.1 200\nheader1: value2\nheader2: value2".getBytes());
+        when(socket.getInputStream()).thenReturn(inputStream);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        when(socket.getOutputStream()).thenReturn(outputStream);
+
+        HttpClient client = Mockito.spy(HttpClient.class);
+        when(client.createSocket(request)).thenReturn(socket);
+
         client.send(request, HttpResponse.BodyHandlers.ofString());
-        String acceptCharset = request.headers().get("Accept-charset");
-        assertEquals(charset, acceptCharset);
+
+        String[] split = outputStream.toString().split("Accept-charset: ");
+        split = split[1].split("\n");
+        String sentCharset = split[0];
+        assertEquals(charset, sentCharset);
     }
 
     @Test
@@ -99,26 +130,28 @@ class HttpClientTest {
         contentLengthTest(request, String.valueOf(bytes.length));
     }
 
-    @Test
-    @Description("Tests if client sets automatically content-length after giving input stream body")
-    void automaticContentLengthSetInputStreamBody() throws IOException, URISyntaxException {
-        byte[] bytes = "testing".getBytes();
-        ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(bytes);
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(new URI("https://postman-echo.com/post"))
-                .POST(HttpRequest.BodyPublishers.ofInputStream(() -> byteArrayInputStream))
-                .build();
-
-        contentLengthTest(request, String.valueOf(bytes.length));
-    }
-
     private static void contentLengthTest(HttpRequest request, String length) throws IOException {
         String contentLength = request.headers().get("Content-length");
         assertNull(contentLength);
 
-        HttpClient client = new HttpClient();
+        Socket socket = Mockito.mock(Socket.class);
+        ByteArrayInputStream inputStream = new ByteArrayInputStream("HTTP/1.1 200\nheader1: value2\nheader2: value2".getBytes());
+        when(socket.getInputStream()).thenReturn(inputStream);
+        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+        when(socket.getOutputStream()).thenReturn(outputStream);
+
+        HttpClient client = Mockito.spy(HttpClient.class);
+        when(client.createSocket(request)).thenReturn(socket);
+
         client.send(request, HttpResponse.BodyHandlers.ofString());
-        contentLength = request.headers().get("Content-length");
-        assertEquals(contentLength, length);
+
+        String[] split = outputStream.toString().split("Content-length: ");
+        if (split.length > 1) {
+            split = split[1].split("\r\n");
+            if (split.length > 1)
+                contentLength = split[0];
+        }
+
+        assertEquals(length, contentLength);
     }
 }

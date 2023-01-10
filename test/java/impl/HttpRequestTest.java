@@ -5,7 +5,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.ByteArrayInputStream;
-import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
@@ -44,11 +43,13 @@ class HttpRequestTest {
 
     @Test
     @Description("Tests if headers are set from builder to request.")
+        //todo @BEFOREALL builder
     void getHeaders() {
+        Map<String, String> headers = Map.of("key", "value");
         HttpRequestBuilder builder = Mockito.mock(HttpRequestBuilder.class);
-        builder.headers = new HashMap<>(Map.of("key", "value"));
+        builder.headers = new HashMap<>(headers);
         HttpRequest request = new HttpRequest(builder);
-        assertEquals(Map.of("key", "value"), request.headers());
+        assertEquals(headers, request.headers());
     }
 
     @Test
